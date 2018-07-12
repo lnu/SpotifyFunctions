@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.27703.2042
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SpotifyFunctions", "FunctionApp1\SpotifyFunctions.csproj", "{49E7B9FF-8ABE-4659-A37D-2B42698145B4}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SpotifyFunctions", "SpotifyFunctions\SpotifyFunctions.csproj", "{49E7B9FF-8ABE-4659-A37D-2B42698145B4}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
