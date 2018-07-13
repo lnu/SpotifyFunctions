@@ -52,7 +52,7 @@ namespace SpotifyFunctions
 
                 }
                 // extract the table containing the information of the tracks(using HtmlAgilityPack)
-                var doc = new HtmlAgilityPack.HtmlDocument();
+                var doc = new HtmlDocument();
                 doc.LoadHtml(content);
                 string playlistName = doc.DocumentNode.SelectSingleNode("//title").InnerText;
                 List<List<string>> table = doc.DocumentNode.SelectSingleNode("//table")
@@ -102,7 +102,7 @@ namespace SpotifyFunctions
                         song = songs.Tracks?.Items.FirstOrDefault();
                         if (song != null)
                         {
-                            log.Info($"Full match impossible, picking first one:${song.Name} ${song.Album.Name} ${song.Artists.First().Name}");
+                            log.Info($"Full match impossible, picking first one:{song.Name} {song.Album.Name} {song.Artists.First().Name}");
                         }
                     }
 
