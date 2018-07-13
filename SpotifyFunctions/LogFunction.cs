@@ -1,3 +1,4 @@
+using HtmlAgilityPack;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.Azure.WebJobs.Host;
@@ -32,7 +33,7 @@ namespace SpotifyFunctions
             // reading playlist url from request parameters
             var address = await req.Content.ReadAsStringAsync();
 
-            log.Info("Address:{address}");
+            log.Info($"Address:{address}");
 
             // return if address not valid(could be improved
             if (string.IsNullOrEmpty(address) || !address.StartsWith("https://www.rtbf.be/classic21/article"))
@@ -58,7 +59,7 @@ namespace SpotifyFunctions
                                     .Descendants("tr")
                                     .Skip(1)
                                     .Where(tr => tr.Elements("td").All(p => !string.IsNullOrEmpty(p.InnerText.Trim())))
-                                    .Select(tr => tr.Elements("td").Select(td => td.InnerText.Trim()).ToList())
+                                    .Select(tr => tr.Elements("td").Select(td => HtmlEntity.DeEntitize(td.InnerText.Trim())).ToList())
                                     .ToList();
 
                 // create the playlist or exit it if it exists
@@ -85,22 +86,32 @@ namespace SpotifyFunctions
                 foreach (var t in table)
                 {
                     log.Info($"Searching {t[1]} from {t[0]} on {t[2]}");
-                    var songs = await spotifyWebApi.SearchItemsAsync(t[1], SearchType.Track, market: "BE");
+                    var songs = await spotifyWebApi.SearchItemsAsync(string.Concat(t[1], " ", t[0]), SearchType.Track, market: "BE");
 
                     // remove (year) , New! or Out mm/yy from album name 
                     var regEx = new Regex(@"(\(\d{4}\)|, NEW !|Single,|, Out \d{2}\/\d{2})");
                     var albumNameCleaned = regEx.Replace(t[2], "").Trim();
 
                     // filter tracks by the right artist
-                    var artistsFiltered = songs.Tracks?.Items.Where(p => p.Artists.Any(q => string.Compare(q.Name, t[0], true) == 0));
+                    //var artistsFiltered = songs.Tracks?.Items.Where(p => p.Artists.Any(q => string.Compare(q.Name, t[0], true) == 0));
 
                     // get song from right album if possible
-                    var song = artistsFiltered?.FirstOrDefault(p => p.Album.Name.IndexOf(albumNameCleaned, StringComparison.CurrentCultureIgnoreCase) != -1);
+                    var song = songs.Tracks?.Items.FirstOrDefault(p => p.Album.Name.IndexOf(albumNameCleaned, StringComparison.CurrentCultureIgnoreCase) != -1);
                     if (song == null)
                     {
-                        log.Info("Full match impossible, picking first one");
-                        song = artistsFiltered?.FirstOrDefault();
+                        song = songs.Tracks?.Items.FirstOrDefault();
+                        if (song != null)
+                        {
+                            log.Info($"Full match impossible, picking first one:${song.Name} ${song.Album.Name} ${song.Artists.First().Name}");
+                        }
                     }
+
+                    //var song = songs.Tracks?.Items.FirstOrDefault(p => p.Album.Name.IndexOf(albumNameCleaned, StringComparison.CurrentCultureIgnoreCase) != -1);
+                    //if (song == null)
+                    //{
+                    //    song = songs.Tracks?.Items.FirstOrDefault();
+                    //}
+
                     if (song != null)
                     {
                         await spotifyWebApi.AddPlaylistTrackAsync(spotifyProfile.Id, newPlaylist.Id, song.Uri);
