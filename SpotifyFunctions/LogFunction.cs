@@ -18,7 +18,7 @@ namespace SpotifyFunctions
         static SpotifyWebAPI spotifyWebApi = new SpotifyWebAPI()
         {
             UseAuth = true,
-            AccessToken = "Bearer BQCzYEJrMBYeRtaZ2eJnpWLfglKMopRFU353AHMnVhiiHJmxtr7vuH3NkXIfRMEmu2dhsv453Bcv7oU5yb8CPROfJ4X6jK_IArQHCA_YYQq90eKfU9i_1sB69E4EctGt_hxr9WcsP9PyyJyiU6SC1xrzL127ZRKmyZBmH3OCB9R-pUw1SM2HXvVRbCzChXZwyMy5F9tFfOtgX0kpjXjJ_dc5yQM8m9AsOYO6xUopIIR2gtM"
+            AccessToken = Environment.GetEnvironmentVariable("SpotifyToken")
         };
 
         [FunctionName("LogFunction")]
@@ -63,6 +63,12 @@ namespace SpotifyFunctions
 
                 // create the playlist or exit it if it exists
                 var spotifyProfile = await spotifyWebApi.GetPrivateProfileAsync();
+
+                if (spotifyProfile.HasError())
+                {
+                    log.Error($"Spotify error:{spotifyProfile.Error.Message}");
+                    return;
+                }
 
                 var playlists = await spotifyWebApi.GetUserPlaylistsAsync(spotifyProfile.Id);
                 var thisWeekPlaylist = playlists.Items.FirstOrDefault(p => p.Name == playlistName);
