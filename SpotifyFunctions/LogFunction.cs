@@ -89,7 +89,7 @@ namespace SpotifyFunctions
                     var songs = await spotifyWebApi.SearchItemsAsync(string.Concat(t[1], " ", t[0]), SearchType.Track, market: "BE");
 
                     // remove (year) , New! or Out mm/yy from album name 
-                    var regEx = new Regex(@"(\(\d{4}\)|, NEW !|Single,|, Out \d{2}\/\d{2})");
+                    var regEx = new Regex(@"(\(\d{4}\)|, NEW !|Single,|, Out \d{2}\/\d{2})", RegexOptions.IgnoreCase);
                     var albumNameCleaned = regEx.Replace(t[2], "").Trim();
 
                     // filter tracks by the right artist
