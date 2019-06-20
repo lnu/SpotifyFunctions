@@ -1,7 +1,8 @@
 using HtmlAgilityPack;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
-using Microsoft.Azure.WebJobs.Host;
+using Microsoft.Extensions.Logging;
 using SpotifyAPI.Web;
 using SpotifyAPI.Web.Enums;
 using System;
@@ -14,7 +15,7 @@ using System.Threading.Tasks;
 
 namespace SpotifyFunctions
 {
-    public static class LogFunction
+    public static class CreatePlaylistForClassic21Metal
     {
         static SpotifyWebAPI spotifyWebApi = new SpotifyWebAPI()
         {
@@ -22,10 +23,10 @@ namespace SpotifyFunctions
             AccessToken = Environment.GetEnvironmentVariable("SpotifyToken")
         };
 
-        [FunctionName("LogFunction")]
-        public static async Task Run([HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = null)]HttpRequestMessage req, TraceWriter log)
+        [FunctionName("CreatePlaylistForClassic21Metal")]
+        public static async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = null)]HttpRequestMessage req, ILogger log)
         {
-            log.Info($"C# Timer trigger function executed at: {DateTime.Now}");
+            log.LogInformation($"C# Timer trigger function executed at: {DateTime.Now}");
 
             // webclient fails without this
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
@@ -33,13 +34,13 @@ namespace SpotifyFunctions
             // reading playlist url from request parameters
             var address = await req.Content.ReadAsStringAsync();
 
-            log.Info($"Address:{address}");
+            log.LogInformation($"Address:{address}");
 
             // return if address not valid(could be improved
             if (string.IsNullOrEmpty(address) || !address.StartsWith("https://www.rtbf.be/classic21/article"))
             {
-                log.Error("Invalid address");
-                return;
+                log.LogError("Invalid address");
+                return new BadRequestObjectResult("Invalid playlist address");
             }
 
             try
@@ -67,30 +68,45 @@ namespace SpotifyFunctions
 
                 if (spotifyProfile.HasError())
                 {
-                    log.Error($"Spotify error:{spotifyProfile.Error.Message}");
-                    return;
+                    log.LogError($"Spotify error:{spotifyProfile.Error.Message}");
+                    return new BadRequestObjectResult($"Spotify error:{spotifyProfile.Error.Message}");
                 }
 
                 var playlists = await spotifyWebApi.GetUserPlaylistsAsync(spotifyProfile.Id);
                 var thisWeekPlaylist = playlists.Items.FirstOrDefault(p => p.Name == playlistName);
                 if (thisWeekPlaylist != null)
                 {
-                    log.Warning($"Playlist {playlistName} already exists");
-                    return;
+                    log.LogWarning($"Playlist {playlistName} already exists");
+                    return new OkObjectResult($"Playlist {playlistName} already exists");
                 }
                 var newPlaylist = await spotifyWebApi.CreatePlaylistAsync(spotifyProfile.Id, playlistName, true);
+
+
+                if (newPlaylist.HasError())
+                {
+                    log.LogError($"Spotify error:{newPlaylist.Error.Message}");
+                    return new BadRequestObjectResult($"Spotify playlist creation error:{spotifyProfile.Error.Message}");
+                }
 
                 int foundSongs = 0;
 
                 // for each songs search in spotify
                 foreach (var t in table)
                 {
-                    log.Info($"Searching {t[1]} from {t[0]} on {t[2]}");
-                    var songs = await spotifyWebApi.SearchItemsAsync(string.Concat(t[1], " ", t[0]), SearchType.Track, market: "BE");
+                    log.LogInformation($"Searching {t[1]} from {t[0]} on {t[2]}");
+
+                    // remove At  from the song name 
+                    var regEx = new Regex(@"(At )", RegexOptions.IgnoreCase);
+                    var songNameCleaned = t[1].Substring(regEx.Match(t[1]).Length > 0 ? regEx.Match(t[1]).Length : 0);
+
+                    var songs = await spotifyWebApi.SearchItemsAsync(string.Concat(songNameCleaned, " ", t[0]), SearchType.Track, market: "BE");
 
                     // remove (year) , New! or Out mm/yy from album name 
-                    var regEx = new Regex(@"(\(\d{4}\)|, NEW !|Single,|, Out \d{2}\/\d{2})", RegexOptions.IgnoreCase);
-                    var albumNameCleaned = regEx.Replace(t[2], "").Trim();
+                    regEx = new Regex(@"(\(\d{4}\)|, NEW|,NEW|Single,|, Out \d{2}\/\d{2})", RegexOptions.IgnoreCase);
+                    //var albumNameCleaned = regEx.Replace(t[2], "").Trim();
+                    var albumNameCleaned = t[2].Substring(0, regEx.Match(t[2]).Index > 0 ? regEx.Match(t[2]).Index : t[2].Length);
+
+                    log.LogInformation($"Cleaned album name:{albumNameCleaned}");
 
                     // filter tracks by the right artist
                     //var artistsFiltered = songs.Tracks?.Items.Where(p => p.Artists.Any(q => string.Compare(q.Name, t[0], true) == 0));
@@ -102,7 +118,7 @@ namespace SpotifyFunctions
                         song = songs.Tracks?.Items.FirstOrDefault();
                         if (song != null)
                         {
-                            log.Info($"Full match impossible, picking first one:{song.Name} {song.Album.Name} {song.Artists.First().Name}");
+                            log.LogInformation($"Full match impossible, picking first one:{song.Name} {song.Album.Name} {song.Artists.First().Name}");
                         }
                     }
 
@@ -119,14 +135,16 @@ namespace SpotifyFunctions
                     }
                     else
                     {
-                        log.Info("Song not found");
+                        log.LogInformation("Song not found");
                     }
                 }
-                log.Info($"{foundSongs}/{table.Count} songs added");
+                log.LogInformation($"{foundSongs}/{table.Count} songs added");
+                return new OkObjectResult($"Playlist {playlistName} created with {foundSongs}/{table.Count} songs");
             }
             catch (Exception ex)
             {
-                log.Info($"Exception found {ex.Message}");
+                log.LogInformation($"Exception found {ex.Message}");
+                return new BadRequestObjectResult($"An unhandled exception occured");
             }
         }
     }
